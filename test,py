@@ -1,0 +1,72 @@
+import cv2
+import dlib
+import numpy as np
+import time
+
+# 얼굴과 입 모양 감지를 위한 라이브러리 초기화
+face_detector = dlib.get_frontal_face_detector()
+shape_predictor = dlib.shape_predictor('path/to/shape_predictor_68_face_landmarks.dat')
+
+# 웹캠 열기
+cap = cv2.VideoCapture(0)
+
+# 입 모양 분석에 사용할 변수 초기화
+closed_threshold = 0.5
+closed_count = 0
+closed_frames = 5
+start_time = None
+end_time = None
+is_considering = False
+
+while True:
+    # 프레임 읽기
+    ret, frame = cap.read()
+    
+    if not ret:
+        break
+
+    # 얼굴 감지
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    faces = face_detector(gray)
+
+    # 얼굴이 감지되었는지 확인
+    for face in faces:
+        # 입 모양 감지
+        landmarks = shape_predictor(gray, face)
+        landmarks = np.array([[p.x, p.y] for p in landmarks.parts()])
+        mouth_points = landmarks[48:68]  # 입 부분의 랜드마크 포인트
+
+        # 입 모양이 열려있는지 판단
+        mouth_ratio = (mouth_points[6][1] - mouth_points[0][1]) / (np.mean(mouth_points[:, 1]) - mouth_points[0][1])
+
+        # 입 모양이 닫혔을 때 고민 중이라고 판단
+        if mouth_ratio < closed_threshold:
+            closed_count += 1
+            # 고민을 시작하는 시점 기록
+            if not is_considering:
+                is_considering = True
+                start_time = time.time()
+        else:
+            closed_count = 0
+            # 고민이 끝나는 시점 기록
+            if is_considering:
+                is_considering = False
+                end_time = time.time()
+                # 고민하는 시간 계산 및 출력
+                considering_time = end_time - start_time
+                print(f"고민하는 시간: {considering_time:.2f}초")
+
+        # 일정 프레임동안 입 모양이 닫혀있으면 판단
+        if closed_count >= closed_frames:
+            pass
+        
+    # 프레임 출력
+    cv2.imshow("Facial Expression", frame)
+
+    # 'q'를 누르면 종료
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+# 리소스 해제
+cap.release()
+cv2.destroyAllWindows()
