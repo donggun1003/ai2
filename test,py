@@ -1,72 +1,95 @@
-import cv2
-import dlib
 import numpy as np
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Dropout, Embedding, LSTM, GlobalMaxPooling1D
+from tensorflow.keras.optimizers import Adam
 import time
 
-# 얼굴과 입 모양 감지를 위한 라이브러리 초기화
-face_detector = dlib.get_frontal_face_detector()
-shape_predictor = dlib.shape_predictor('path/to/shape_predictor_68_face_landmarks.dat')
 
-# 웹캠 열기
-cap = cv2.VideoCapture(0)
+labels = np.array([1, 0, 1, 0, 1, 1, 0, 0])  # 1: 고민, 0: 비고민
+texts = [
+    "고민이 많아요... 어떡해야 할까요?",
+    "오늘 모임 시간 변경됩니다.",
+    "고민이 많이 줄었네요!",
+    "당신이 특별한 선물을 받았습니다!",
+    "회의 일정 알림입니다.",
+    "이번 시험 어떻게 준비해야 할까요?",
+    "일이 잘 안 풀려서 고민이에요.",
+    "오늘 기분이 안 좋아서 힘들어요."
+]
 
-# 입 모양 분석에 사용할 변수 초기화
-closed_threshold = 0.5
-closed_count = 0
-closed_frames = 5
-start_time = None
-end_time = None
-is_considering = False
 
-while True:
-    # 프레임 읽기
-    ret, frame = cap.read()
-    
-    if not ret:
-        break
+new_labels = np.array([1, 0, 1])  # 1: 고민, 0: 비고민
+new_texts = [
+    "오늘 날씨가 좋아서 기분이 좋아요!",
+    "업무가 너무 바빠서 힘들어요...",
+    "공부를 열심히 해야 하는데 집중이 안돼요..."
+]
 
-    # 얼굴 감지
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    faces = face_detector(gray)
 
-    # 얼굴이 감지되었는지 확인
-    for face in faces:
-        # 입 모양 감지
-        landmarks = shape_predictor(gray, face)
-        landmarks = np.array([[p.x, p.y] for p in landmarks.parts()])
-        mouth_points = landmarks[48:68]  # 입 부분의 랜드마크 포인트
+labels = np.concatenate([labels, new_labels], axis=0)
+texts = texts + new_texts
 
-        # 입 모양이 열려있는지 판단
-        mouth_ratio = (mouth_points[6][1] - mouth_points[0][1]) / (np.mean(mouth_points[:, 1]) - mouth_points[0][1])
 
-        # 입 모양이 닫혔을 때 고민 중이라고 판단
-        if mouth_ratio < closed_threshold:
-            closed_count += 1
-            # 고민을 시작하는 시점 기록
-            if not is_considering:
-                is_considering = True
-                start_time = time.time()
-        else:
-            closed_count = 0
-            # 고민이 끝나는 시점 기록
-            if is_considering:
-                is_considering = False
-                end_time = time.time()
-                # 고민하는 시간 계산 및 출력
-                considering_time = end_time - start_time
-                print(f"고민하는 시간: {considering_time:.2f}초")
+def text_to_index(text, word_index):
+    return [word_index[word] for word in text.split() if word in word_index]
 
-        # 일정 프레임동안 입 모양이 닫혀있으면 판단
-        if closed_count >= closed_frames:
-            pass
-        
-    # 프레임 출력
-    cv2.imshow("Facial Expression", frame)
 
-    # 'q'를 누르면 종료
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
+max_sequence_length = max(len(text.split()) for text in texts)
 
-# 리소스 해제
-cap.release()
-cv2.destroyAllWindows()
+
+word_index = {}
+for text in texts:
+    for word in text.split():
+        if word not in word_index:
+            word_index[word] = len(word_index) + 1
+
+sequences = [text_to_index(text, word_index) for text in texts]
+
+
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+sequences_padded = pad_sequences(sequences, maxlen=max_sequence_length)
+
+
+from sklearn.model_selection import train_test_split
+X_train, X_test, y_train, y_test = train_test_split(sequences_padded, labels, test_size=0.2, random_state=42)
+
+
+model = Sequential()
+model.add(Embedding(input_dim=len(word_index) + 1, output_dim=32, input_length=max_sequence_length))
+model.add(LSTM(64, return_sequences=True))
+model.add(GlobalMaxPooling1D())
+model.add(Dense(32, activation='relu'))
+model.add(Dropout(0.5))
+model.add(Dense(1, activation='sigmoid'))
+
+
+model.compile(loss='binary_crossentropy', optimizer=Adam(learning_rate=0.001), metrics=['accuracy'])
+
+
+model.fit(X_train, y_train, epochs=20, batch_size=4, verbose=1)
+
+
+user_text = "사용자가 채팅을 치지 않는다면 고민중입니다..."
+
+
+user_text_sequence = text_to_index(user_text, word_index)
+
+
+user_text_padded = pad_sequences([user_text_sequence], maxlen=max_sequence_length)
+
+
+prediction = model.predict(user_text_padded)
+
+if prediction[0][0] >= 0.5:
+    print("사용자가 고민 중입니다.")
+else:
+    print("사용자가 채팅을 치지 않는다면 고민중입니다.")
+
+
+start_time = time.time()
+
+time.sleep(3)  
+end_time = time.time()
+
+time_taken = end_time - start_time
+print(f"사용자가 고민하는 시간: {time_taken:.2f}초")
