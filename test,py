@@ -4,7 +4,7 @@ from tensorflow.keras.layers import Dense, Dropout, Embedding, LSTM, GlobalMaxPo
 from tensorflow.keras.optimizers import Adam
 import time
 
-
+# 기존 데이터셋
 labels = np.array([1, 0, 1, 0, 1, 1, 0, 0])  # 1: 고민, 0: 비고민
 texts = [
     "고민이 많아요... 어떡해야 할까요?",
@@ -17,7 +17,7 @@ texts = [
     "오늘 기분이 안 좋아서 힘들어요."
 ]
 
-
+# 새로운 데이터 추가
 new_labels = np.array([1, 0, 1])  # 1: 고민, 0: 비고민
 new_texts = [
     "오늘 날씨가 좋아서 기분이 좋아요!",
@@ -25,18 +25,18 @@ new_texts = [
     "공부를 열심히 해야 하는데 집중이 안돼요..."
 ]
 
-
+# 기존 데이터와 새로운 데이터 병합
 labels = np.concatenate([labels, new_labels], axis=0)
 texts = texts + new_texts
 
-
+# 텍스트 데이터를 정수 인덱스로 변환하는 함수
 def text_to_index(text, word_index):
     return [word_index[word] for word in text.split() if word in word_index]
 
-
+# 텍스트 데이터의 최대 길이를 계산
 max_sequence_length = max(len(text.split()) for text in texts)
 
-
+# 텍스트 데이터를 정수 인덱스로 변환
 word_index = {}
 for text in texts:
     for word in text.split():
@@ -45,15 +45,15 @@ for text in texts:
 
 sequences = [text_to_index(text, word_index) for text in texts]
 
-
+# 패딩을 통해 텍스트 데이터의 길이를 일정하게 맞춤
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 sequences_padded = pad_sequences(sequences, maxlen=max_sequence_length)
 
-
+# 데이터를 학습 데이터와 테스트 데이터로 나눔
 from sklearn.model_selection import train_test_split
 X_train, X_test, y_train, y_test = train_test_split(sequences_padded, labels, test_size=0.2, random_state=42)
 
-
+# 딥러닝 모델 구성
 model = Sequential()
 model.add(Embedding(input_dim=len(word_index) + 1, output_dim=32, input_length=max_sequence_length))
 model.add(LSTM(64, return_sequences=True))
@@ -62,22 +62,22 @@ model.add(Dense(32, activation='relu'))
 model.add(Dropout(0.5))
 model.add(Dense(1, activation='sigmoid'))
 
-
+# 모델 컴파일
 model.compile(loss='binary_crossentropy', optimizer=Adam(learning_rate=0.001), metrics=['accuracy'])
 
-
+# 모델 학습
 model.fit(X_train, y_train, epochs=20, batch_size=4, verbose=1)
 
+# 사용자의 입력 텍스트
+user_text = "사용자가 채팅을 치지 않는다면 고민중입니다..."
 
-user_text = "사용자가 채팅을 치지 않는다면 고민중입니다."
-
-
+# 입력 텍스트를 정수 인덱스로 변환
 user_text_sequence = text_to_index(user_text, word_index)
 
-
+# 패딩을 통해 텍스트 데이터의 길이를 일정하게 맞춤
 user_text_padded = pad_sequences([user_text_sequence], maxlen=max_sequence_length)
 
-
+# 입력 텍스트를 벡터화하여 예측
 prediction = model.predict(user_text_padded)
 
 if prediction[0][0] >= 0.5:
@@ -85,10 +85,10 @@ if prediction[0][0] >= 0.5:
 else:
     print("사용자가 채팅을 치지 않는다면 고민중입니다.")
 
-
+# 사용자가 고민하는 시간 측정
 start_time = time.time()
-
-time.sleep(3)  
+# 사용자의 고민하는 작업을 수행
+time.sleep(3)  # 임의로 3초의 시간이 걸리는 작업이라고 가정합니다.
 end_time = time.time()
 
 time_taken = end_time - start_time
